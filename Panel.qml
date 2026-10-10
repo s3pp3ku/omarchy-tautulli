@@ -205,9 +205,7 @@ Panel {
     anchors.fill: parent
     bar: root.bar
     text: "\uf008"
-    foreground: !root.configured ? Qt.darker(root.fg, 1.6) : root.fg
-    activeColor: root.themeAccent
-    active: root.configured && !root.idle
+    foreground: root.fg
     dimmed: root.configured && root.idle && root.dimWhenIdle
     tooltipText: !root.configured
       ? "Plex Activity \u2014 needs a Tautulli URL and API key"
