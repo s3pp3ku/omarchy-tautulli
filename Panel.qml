@@ -52,8 +52,20 @@ Panel {
     editingCredentials = false
   }
 
+  // Strips a trailing slash and, since the single most common copy-paste
+  // mistake is bookmarking Tautulli's own web UI instead of its base URL,
+  // a trailing /home (or any of its other top-level UI routes) too. The
+  // API always lives at <base>/api/v2 regardless of which page you copied
+  // the address bar from.
+  function cleanTautulliUrl(raw) {
+    return String(raw || "").trim()
+      .replace(/\/+$/, "")
+      .replace(/\/(home|history|graphs|sync|logs|settings|status|update)\/?$/i, "")
+      .replace(/\/+$/, "")
+  }
+
   function saveCredentials() {
-    var url = urlDraft.trim().replace(/\/+$/, "")
+    var url = cleanTautulliUrl(urlDraft)
     var key = keyDraft.trim()
     tautulliUrl = url
     apiKey = key
@@ -82,8 +94,20 @@ Panel {
     if (root.credentialsLoaded) return
     try {
       var parsed = raw ? JSON.parse(raw) : {}
-      root.tautulliUrl = String(parsed.url || "")
+      var rawUrl = String(parsed.url || "")
+      var cleanedUrl = root.cleanTautulliUrl(rawUrl)
+      root.tautulliUrl = cleanedUrl
       root.apiKey = String(parsed.apiKey || "")
+      // Rewrite a file saved before cleanTautulliUrl existed (or hand-edited
+      // with a /home suffix) so it's fixed for good, not just this session.
+      // Deferred: calling setText() from inside onLoaded's own call stack
+      // doesn't stick.
+      if (cleanedUrl !== rawUrl && cleanedUrl !== "") {
+        var healedKey = root.apiKey
+        Qt.callLater(function() {
+          credentialsFile.setText(JSON.stringify({ url: cleanedUrl, apiKey: healedKey }, null, 2) + "\n")
+        })
+      }
     } catch (e) {
       root.tautulliUrl = ""
       root.apiKey = ""
@@ -211,13 +235,14 @@ Panel {
     hoverEnabled: true
     cursorShape: Qt.PointingHandCursor
     onClicked: root.toggle()
+  }
 
-    PanelToolTip {
-      visible: clickArea.containsMouse
-      text: !root.configured
-        ? "Plex Activity — needs a Tautulli URL and API key"
-        : (root.idle ? "Nobody's watching Plex" : root.streamCount + (root.streamCount === 1 ? " stream" : " streams") + " on Plex")
-    }
+  PanelToolTip {
+    visible: clickArea.containsMouse
+    text: !root.configured
+      ? "Plex Activity — needs a Tautulli URL and API key"
+      : (root.idle ? "Nobody's watching Plex" : root.streamCount + (root.streamCount === 1 ? " stream" : " streams") + " on Plex")
+    fontFamily: root.fontFamily
   }
 
   // ------------------------------------------------------------------- popup
