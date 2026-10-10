@@ -18,12 +18,78 @@ Panel {
 
   // ---------------------------------------------------------------- settings
 
-  readonly property string tautulliUrl: String(setting("url", "")).trim().replace(/\/+$/, "")
-  readonly property string apiKey: String(setting("apiKey", "")).trim()
+  // The URL and API key are credentials, not preferences, so they live in
+  // their own local-only file under ~/.local/state rather than in this
+  // widget's shell.json/extra-bars.json entry — those two files get swept
+  // into the user's dotfiles backup and pushed to GitHub on every change.
+  readonly property string stateDir: Quickshell.env("HOME") + "/.local/state/omarchy/"
+  readonly property string credentialsPath: stateDir + "tautulli-credentials.json"
+
+  property string tautulliUrl: ""
+  property string apiKey: ""
+  property bool credentialsLoaded: false
+
   readonly property int pollSeconds: Math.max(10, parseInt(setting("pollSeconds", 30), 10) || 30)
   readonly property bool showCount: setting("showCount", true) === true
   readonly property bool dimWhenIdle: setting("dimWhenIdle", true) === true
   readonly property bool configured: tautulliUrl !== "" && apiKey !== ""
+
+  property bool editingCredentials: false
+  property string urlDraft: ""
+  property string keyDraft: ""
+
+  function startEditingCredentials() {
+    urlDraft = tautulliUrl
+    keyDraft = apiKey
+    editingCredentials = true
+    Qt.callLater(function() {
+      urlField.text = root.urlDraft
+      keyField.text = root.keyDraft
+    })
+  }
+
+  function cancelEditingCredentials() {
+    editingCredentials = false
+  }
+
+  function saveCredentials() {
+    var url = urlDraft.trim().replace(/\/+$/, "")
+    var key = keyDraft.trim()
+    tautulliUrl = url
+    apiKey = key
+    editingCredentials = false
+    ensureStateDirProc.running = true
+    credentialsFile.setText(JSON.stringify({ url: url, apiKey: key }, null, 2) + "\n")
+    if (url !== "" && key !== "") root.refresh()
+  }
+
+  Process {
+    id: ensureStateDirProc
+    command: ["mkdir", "-p", root.stateDir]
+  }
+
+  FileView {
+    id: credentialsFile
+    path: root.credentialsPath
+    watchChanges: false
+    atomicWrites: true
+    printErrors: false
+    onLoaded: root.loadCredentials(text())
+    onLoadFailed: root.loadCredentials("")
+  }
+
+  function loadCredentials(raw) {
+    if (root.credentialsLoaded) return
+    try {
+      var parsed = raw ? JSON.parse(raw) : {}
+      root.tautulliUrl = String(parsed.url || "")
+      root.apiKey = String(parsed.apiKey || "")
+    } catch (e) {
+      root.tautulliUrl = ""
+      root.apiKey = ""
+    }
+    root.credentialsLoaded = true
+  }
 
   readonly property bool vertical: bar ? bar.vertical : false
   readonly property int barSize: bar ? bar.barSize : Style.bar.sizeHorizontal
@@ -178,11 +244,12 @@ Panel {
       spacing: Style.space(14)
 
       Row {
+        id: headerRow
         width: parent.width
         spacing: Style.space(10)
 
         Column {
-          width: parent.width - refreshButton.width - parent.spacing
+          width: parent.width - headerButtons.width - headerRow.spacing
           spacing: Style.space(3)
           Text {
             text: "PLEX ACTIVITY"
@@ -193,32 +260,115 @@ Panel {
             font.letterSpacing: 1.5
           }
           Text {
-            text: root.configured
-              ? (root.idle ? "Nobody's watching right now" : root.streamCount + (root.streamCount === 1 ? " stream" : " streams") + " active")
-              : "Set your Tautulli URL and API key in this widget's settings"
+            text: !root.credentialsLoaded
+              ? "Loading..."
+              : (root.configured
+                ? (root.idle ? "Nobody's watching right now" : root.streamCount + (root.streamCount === 1 ? " stream" : " streams") + " active")
+                : "Not set up yet — click SET UP")
             color: root.fg
             opacity: 0.65
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
           }
         }
-        Button {
-          id: refreshButton
-          text: root.loading ? "..." : "REFRESH"
-          tooltipText: "Poll Tautulli again now"
-          fontFamily: root.fontFamily
-          fontSize: Style.font.bodySmall
-          foreground: root.fg
-          bordered: true
-          enabled: root.configured && !root.loading
-          onClicked: root.refresh()
+        Row {
+          id: headerButtons
+          spacing: Style.space(6)
+          Button {
+            text: root.configured ? "EDIT" : "SET UP"
+            tooltipText: root.configured ? "Change the Tautulli URL or API key" : "Enter your Tautulli URL and API key"
+            fontFamily: root.fontFamily
+            fontSize: Style.font.bodySmall
+            foreground: root.fg
+            bordered: true
+            onClicked: root.editingCredentials ? root.cancelEditingCredentials() : root.startEditingCredentials()
+          }
+          Button {
+            id: refreshButton
+            text: root.loading ? "..." : "REFRESH"
+            tooltipText: "Poll Tautulli again now"
+            fontFamily: root.fontFamily
+            fontSize: Style.font.bodySmall
+            foreground: root.fg
+            bordered: true
+            enabled: root.configured && !root.loading
+            onClicked: root.refresh()
+          }
         }
       }
 
       PanelSeparator { foreground: root.themeAccent }
 
+      Column {
+        width: parent.width
+        spacing: Style.space(10)
+        visible: root.editingCredentials
+
+        Text {
+          text: "TAUTULLI URL"
+          color: root.fg
+          opacity: 0.55
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
+          font.letterSpacing: 1
+        }
+        TextField {
+          id: urlField
+          width: parent.width
+          placeholderText: "http://192.168.1.50:8181"
+          foreground: root.fg
+          font.family: root.fontFamily
+          onTextChanged: root.urlDraft = text
+        }
+        Text {
+          text: "API KEY"
+          color: root.fg
+          opacity: 0.55
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
+          font.letterSpacing: 1
+        }
+        TextField {
+          id: keyField
+          width: parent.width
+          placeholderText: "from Tautulli → Settings → Web Interface → API"
+          foreground: root.fg
+          font.family: root.fontFamily
+          onTextChanged: root.keyDraft = text
+        }
+        Text {
+          width: parent.width
+          text: "Stored only on this machine, in ~/.local/state/omarchy/ — never swept into a dotfiles backup."
+          color: root.fg
+          opacity: 0.5
+          wrapMode: Text.Wrap
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
+        }
+        Row {
+          spacing: Style.space(6)
+          Button {
+            text: "SAVE"
+            fontFamily: root.fontFamily
+            fontSize: Style.font.bodySmall
+            foreground: root.fg
+            bordered: true
+            enabled: root.urlDraft.trim() !== "" && root.keyDraft.trim() !== ""
+            onClicked: root.saveCredentials()
+          }
+          Button {
+            text: "CANCEL"
+            fontFamily: root.fontFamily
+            fontSize: Style.font.bodySmall
+            foreground: root.fg
+            bordered: true
+            onClicked: root.cancelEditingCredentials()
+          }
+        }
+      }
+
       Text {
-        visible: root.lastError !== ""
+        visible: !root.editingCredentials && root.lastError !== ""
         width: parent.width
         text: root.lastError
         color: Color.urgent
@@ -228,7 +378,7 @@ Panel {
       }
 
       Text {
-        visible: root.configured && root.lastError === "" && root.idle
+        visible: !root.editingCredentials && root.configured && root.lastError === "" && root.idle
         text: "Everything's quiet on the server."
         color: root.fg
         opacity: 0.6
@@ -239,7 +389,7 @@ Panel {
       Column {
         width: parent.width
         spacing: Style.space(14)
-        visible: root.sessions.length > 0
+        visible: !root.editingCredentials && root.sessions.length > 0
 
         Repeater {
           model: root.sessions
