@@ -232,8 +232,8 @@ Panel {
     owner: root
     bar: root.bar
     open: root.opened
-    contentWidth: panel.fittedContentWidth(Style.space(460))
-    contentHeight: panel.fittedContentHeight(column.implicitHeight)
+    contentWidth: panel.fittedContentWidth(Style.space(480))
+    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(580))
 
     PanelKeyCatcher {
       anchors.fill: parent
@@ -241,11 +241,25 @@ Panel {
       onTabRequested: function(direction) { root.switchPanel(direction) }
     }
 
-    Column {
-      id: column
+    // A Flickable, not a plain Column: fittedContentHeight already caps the
+    // popup to fit the screen, but with ten sessions the content is taller
+    // than that cap — without this it would just get clipped at the bottom
+    // instead of scrolling.
+    Flickable {
+      id: scroll
       anchors.fill: parent
-      anchors.margins: Style.space(18)
-      spacing: Style.space(14)
+      contentWidth: width
+      contentHeight: column.implicitHeight + Style.space(40)
+      clip: true
+      boundsBehavior: Flickable.StopAtBounds
+      interactive: contentHeight > height
+
+      Column {
+        id: column
+        x: Style.space(20)
+        y: Style.space(20)
+        width: scroll.width - Style.space(40)
+        spacing: Style.space(14)
 
       Row {
         id: headerRow
@@ -392,7 +406,7 @@ Panel {
 
       Column {
         width: parent.width
-        spacing: Style.space(10)
+        spacing: Style.space(12)
         visible: !root.editingCredentials && root.sessions.length > 0
 
         Repeater {
@@ -402,7 +416,7 @@ Panel {
             id: card
             required property var modelData
             width: column.width
-            implicitHeight: Math.max(posterFrame.height, cardColumn.implicitHeight) + Style.space(24)
+            implicitHeight: Math.max(posterFrame.height, cardColumn.implicitHeight) + Style.space(30)
             radius: Style.cornerRadius
             color: Qt.alpha(root.themeAccent, 0.10)
             border.width: 1
@@ -420,10 +434,10 @@ Panel {
             Rectangle {
               id: posterFrame
               visible: poster.source !== ""
-              width: visible ? Style.space(54) : 0
-              height: Style.space(81)
+              width: visible ? Style.space(62) : 0
+              height: Style.space(93)
               anchors.left: parent.left
-              anchors.leftMargin: Style.space(14)
+              anchors.leftMargin: Style.space(16)
               anchors.verticalCenter: parent.verticalCenter
               radius: Style.cornerRadius
               clip: true
@@ -444,9 +458,9 @@ Panel {
               anchors.left: posterFrame.right
               anchors.right: parent.right
               anchors.verticalCenter: parent.verticalCenter
-              anchors.leftMargin: Style.space(12)
-              anchors.rightMargin: Style.space(14)
-              spacing: Style.space(6)
+              anchors.leftMargin: Style.space(14)
+              anchors.rightMargin: Style.space(16)
+              spacing: Style.space(7)
 
               Row {
                 width: parent.width
@@ -559,6 +573,7 @@ Panel {
             }
           }
         }
+      }
       }
     }
   }
