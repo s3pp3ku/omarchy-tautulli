@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "s3pp3ku.tautulli",
+  "name": "Plex Activity",
+  "version": "1.0.0",
+  "author": "s3pp3ku",
+  "license": "MIT",
+  "description": "Who's watching your Plex server right now, via your own Tautulli instance.",
+  "kinds": ["bar-widget"],
+  "entryPoints": {"barWidget": "Panel.qml"},
+  "barWidget": {
+    "displayName": "Plex Activity",
+    "description": "Live Plex sessions (user, title, player, quality, progress) pulled from Tautulli.",
+    "category": "Media",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "pollSeconds": 30,
+      "showCount": true,
+      "dimWhenIdle": true
+    },
+    "schema": [
+      { "key": "url", "type": "string", "label": "Tautulli URL", "defaultValue": "", "description": "Base URL, e.g. http://192.168.1.50:8181. No trailing slash needed." },
+      { "key": "apiKey", "type": "string", "label": "API key", "defaultValue": "", "description": "From Tautulli Settings -> Web Interface -> API. Stored in plain text in this widget's settings, same as any other plugin key." },
+      { "key": "pollSeconds", "type": "integer", "label": "Refresh interval (seconds)", "min": 10, "max": 300, "step": 5, "defaultValue": 30 },
+      { "key": "showCount", "type": "boolean", "label": "Show the active-stream count next to the icon", "defaultValue": true },
+      { "key": "dimWhenIdle", "type": "boolean", "label": "Dim the icon when nobody is watching", "defaultValue": true }
+    ]
+  }
+}
