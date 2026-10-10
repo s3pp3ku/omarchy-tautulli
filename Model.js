@@ -40,7 +40,6 @@ function parseSession(s) {
     product: String(s.product || ""),
     quality: formatQuality(s),
     bandwidth: formatBandwidth(s.bandwidth),
-    location: String(s.location || "").toUpperCase(),
     ipAddress: String(s.ip_address || "")
   }
 }
@@ -57,8 +56,9 @@ function formatQuality(s) {
   var decision = String(s.transcode_decision || "").toLowerCase()
   var label = decision === "transcode" ? "Transcode" : decision === "copy" ? "Direct Stream" : decision === "direct play" ? "Direct Play" : ""
   var resolution = String(s.stream_video_resolution || s.video_resolution || "")
-  if (label && resolution) return label + " • " + resolution + "p"
-  return resolution ? resolution + "p" : label
+  var codec = String(s.stream_video_codec || s.video_codec || "").toUpperCase()
+  var parts = [label, resolution ? resolution + "p" : "", codec].filter(function(v) { return v !== "" })
+  return parts.join(" • ")
 }
 
 function formatBandwidth(kbps) {

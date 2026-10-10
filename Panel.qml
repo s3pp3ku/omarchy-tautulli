@@ -14,8 +14,6 @@ Panel {
   ipcTarget: "s3pp3ku.tautulli"
   manageIpc: false
 
-  property var anchorItem: null
-
   // ---------------------------------------------------------------- settings
 
   // The URL and API key are credentials, not preferences, so they live in
@@ -221,11 +219,11 @@ Panel {
 
   KeyboardPanel {
     id: panel
-    anchorItem: root.anchorItem
+    anchorItem: iconButton
     owner: root
     bar: root.bar
     open: root.opened
-    contentWidth: panel.fittedContentWidth(Style.space(420))
+    contentWidth: panel.fittedContentWidth(Style.space(460))
     contentHeight: panel.fittedContentHeight(column.implicitHeight)
 
     PanelKeyCatcher {
@@ -452,7 +450,10 @@ Panel {
 
               Text {
                 width: parent.width
-                text: (card.modelData.episodeTag !== "" ? card.modelData.episodeTag + "  \u2022  " : "") + card.modelData.title
+                text: [
+                  card.modelData.episodeTag,
+                  card.modelData.title + (card.modelData.year !== "" ? " (" + card.modelData.year + ")" : "")
+                ].filter(function(v) { return v !== "" }).join("  \u2022  ")
                 color: root.fg
                 font.bold: true
                 wrapMode: Text.Wrap
@@ -465,7 +466,7 @@ Panel {
               Text {
                 width: parent.width
                 visible: text !== ""
-                text: [card.modelData.library, card.modelData.year].filter(function(v) { return v !== "" }).join("  \u2022  ")
+                text: card.modelData.library
                 color: root.themeMuted
                 elide: Text.ElideRight
                 font.family: root.fontFamily
@@ -474,10 +475,22 @@ Panel {
 
               Text {
                 width: parent.width
-                text: [card.modelData.player || card.modelData.product, card.modelData.quality, card.modelData.bandwidth, card.modelData.location]
+                text: [card.modelData.player || card.modelData.product, card.modelData.quality]
                   .filter(function(v) { return v !== "" }).join("  \u2022  ")
                 color: root.fg
                 opacity: 0.7
+                elide: Text.ElideRight
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+              }
+
+              Text {
+                width: parent.width
+                visible: text !== ""
+                text: [card.modelData.bandwidth, card.modelData.ipAddress]
+                  .filter(function(v) { return v !== "" }).join("  \u2022  ")
+                color: root.fg
+                opacity: 0.55
                 elide: Text.ElideRight
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
