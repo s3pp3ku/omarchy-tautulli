@@ -16,12 +16,10 @@
     "defaultSection": "right",
     "defaults": {
       "pollSeconds": 30,
-      "showCount": true,
       "dimWhenIdle": true
     },
     "schema": [
       { "key": "pollSeconds", "type": "integer", "label": "Refresh interval (seconds)", "min": 10, "max": 300, "step": 5, "defaultValue": 30 },
-      { "key": "showCount", "type": "boolean", "label": "Show the active-stream count next to the icon", "defaultValue": true },
       { "key": "dimWhenIdle", "type": "boolean", "label": "Dim the icon when nobody is watching", "defaultValue": true }
     ]
   }

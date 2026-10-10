@@ -30,7 +30,6 @@ Panel {
   property bool credentialsLoaded: false
 
   readonly property int pollSeconds: Math.max(10, parseInt(setting("pollSeconds", 30), 10) || 30)
-  readonly property bool showCount: setting("showCount", true) === true
   readonly property bool dimWhenIdle: setting("dimWhenIdle", true) === true
   readonly property bool configured: tautulliUrl !== "" && apiKey !== ""
 
@@ -115,8 +114,6 @@ Panel {
     root.credentialsLoaded = true
   }
 
-  readonly property bool vertical: bar ? bar.vertical : false
-  readonly property int barSize: bar ? bar.barSize : Style.bar.sizeHorizontal
   readonly property color fg: bar ? bar.foreground : Color.foreground
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property color themeAccent: Color.accent
@@ -194,55 +191,30 @@ Panel {
   }
 
   // --------------------------------------------------------------- bar button
+  //
+  // A raw MouseArea + PanelToolTip looked right in isolation but the real
+  // bar runs its tooltips through bar.showTooltip()/hideTooltip() (one
+  // shared surface, not a Popup per icon) and tracks click targets through
+  // bar.registerClickTarget() for its own press/drag handling, both wired
+  // up by WidgetButton/BarIconButton already. Hand-rolling it here is what
+  // made the tooltip not show and clicks not open the popup reliably.
 
-  implicitWidth: row.implicitWidth + Style.space(14)
-  implicitHeight: barSize
+  implicitWidth: iconButton.implicitWidth
+  implicitHeight: iconButton.implicitHeight
 
-  Row {
-    id: row
-    anchors.centerIn: parent
-    spacing: Style.space(6)
-
-    Text {
-      id: glyph
-      textFormat: Text.PlainText
-      anchors.verticalCenter: parent.verticalCenter
-      text: ""
-      color: !root.configured ? Qt.darker(root.fg, 1.6) : (root.idle && root.dimWhenIdle ? Qt.darker(root.fg, 1.4) : root.themeAccent)
-      font.family: root.fontFamily
-      font.pixelSize: Style.font.body
-
-      Behavior on color {
-        enabled: !root.bar || root.bar.foregroundAnimationEnabled
-        ColorAnimation { duration: 160 }
-      }
-    }
-
-    Text {
-      anchors.verticalCenter: parent.verticalCenter
-      text: String(root.streamCount)
-      visible: !root.vertical && root.showCount && root.configured && root.streamCount > 0
-      color: root.themeAccent
-      font.family: root.fontFamily
-      font.pixelSize: Style.font.body
-      font.bold: true
-    }
-  }
-
-  MouseArea {
-    id: clickArea
+  BarIconButton {
+    id: iconButton
     anchors.fill: parent
-    hoverEnabled: true
-    cursorShape: Qt.PointingHandCursor
-    onClicked: root.toggle()
-  }
-
-  PanelToolTip {
-    visible: clickArea.containsMouse
-    text: !root.configured
-      ? "Plex Activity — needs a Tautulli URL and API key"
+    bar: root.bar
+    text: "\uf008"
+    foreground: !root.configured ? Qt.darker(root.fg, 1.6) : root.fg
+    activeColor: root.themeAccent
+    active: root.configured && !root.idle
+    dimmed: root.configured && root.idle && root.dimWhenIdle
+    tooltipText: !root.configured
+      ? "Plex Activity \u2014 needs a Tautulli URL and API key"
       : (root.idle ? "Nobody's watching Plex" : root.streamCount + (root.streamCount === 1 ? " stream" : " streams") + " on Plex")
-    fontFamily: root.fontFamily
+    onPressed: function(button) { root.toggle() }
   }
 
   // ------------------------------------------------------------------- popup
@@ -413,70 +385,132 @@ Panel {
 
       Column {
         width: parent.width
-        spacing: Style.space(14)
+        spacing: Style.space(10)
         visible: !root.editingCredentials && root.sessions.length > 0
 
         Repeater {
           model: root.sessions
 
-          Column {
+          Rectangle {
+            id: card
             required property var modelData
             width: column.width
-            spacing: Style.space(4)
-
-            Row {
-              width: parent.width
-              spacing: Style.space(8)
-
-              Text {
-                text: modelData.user
-                color: root.themeAccent
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.body
-                font.bold: true
-              }
-              Text {
-                text: modelData.state.toUpperCase()
-                color: root.fg
-                opacity: 0.55
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-                font.letterSpacing: 1
-              }
-            }
-
-            Text {
-              width: parent.width
-              text: modelData.title
-              color: root.fg
-              wrapMode: Text.Wrap
-              maximumLineCount: 2
-              elide: Text.ElideRight
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
-            }
-
-            Text {
-              width: parent.width
-              text: [modelData.player, modelData.quality, modelData.location].filter(function(v) { return v !== "" }).join("  •  ")
-              color: root.fg
-              opacity: 0.6
-              elide: Text.ElideRight
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-            }
+            implicitHeight: cardColumn.implicitHeight + Style.space(24)
+            radius: Style.cornerRadius
+            color: Qt.alpha(root.themeAccent, 0.10)
+            border.width: 1
+            border.color: Qt.alpha(root.themeAccent, 0.45)
 
             Rectangle {
-              width: parent.width
-              height: Style.space(4)
-              radius: height / 2
-              color: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.14)
+              width: Style.space(3)
+              anchors.top: parent.top
+              anchors.bottom: parent.bottom
+              anchors.left: parent.left
+              radius: width / 2
+              color: root.themeAccent
+            }
 
-              Rectangle {
-                height: parent.height
-                radius: parent.radius
-                width: parent.width * (modelData.progressPercent / 100)
-                color: root.themeAccent
+            Column {
+              id: cardColumn
+              anchors.left: parent.left
+              anchors.right: parent.right
+              anchors.verticalCenter: parent.verticalCenter
+              anchors.leftMargin: Style.space(16)
+              anchors.rightMargin: Style.space(14)
+              spacing: Style.space(6)
+
+              Row {
+                width: parent.width
+                spacing: Style.space(8)
+
+                Text {
+                  text: card.modelData.user
+                  color: root.themeAccent
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.body
+                  font.bold: true
+                }
+
+                Rectangle {
+                  anchors.verticalCenter: parent.verticalCenter
+                  radius: Style.cornerRadius
+                  color: Qt.alpha(root.themeAccent, 0.22)
+                  implicitWidth: stateLabel.implicitWidth + Style.space(12)
+                  implicitHeight: stateLabel.implicitHeight + Style.space(4)
+                  Text {
+                    id: stateLabel
+                    anchors.centerIn: parent
+                    text: card.modelData.state.toUpperCase()
+                    color: root.themeAccent
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                    font.bold: true
+                    font.letterSpacing: 1
+                  }
+                }
+              }
+
+              Text {
+                width: parent.width
+                text: (card.modelData.episodeTag !== "" ? card.modelData.episodeTag + "  \u2022  " : "") + card.modelData.title
+                color: root.fg
+                font.bold: true
+                wrapMode: Text.Wrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+              }
+
+              Text {
+                width: parent.width
+                visible: text !== ""
+                text: [card.modelData.library, card.modelData.year].filter(function(v) { return v !== "" }).join("  \u2022  ")
+                color: root.themeMuted
+                elide: Text.ElideRight
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+              }
+
+              Text {
+                width: parent.width
+                text: [card.modelData.player || card.modelData.product, card.modelData.quality, card.modelData.bandwidth, card.modelData.location]
+                  .filter(function(v) { return v !== "" }).join("  \u2022  ")
+                color: root.fg
+                opacity: 0.7
+                elide: Text.ElideRight
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+              }
+
+              Row {
+                width: parent.width
+                spacing: Style.space(8)
+
+                Rectangle {
+                  id: track
+                  width: parent.width - remainingLabel.implicitWidth - parent.spacing
+                  anchors.verticalCenter: parent.verticalCenter
+                  height: Style.space(5)
+                  radius: height / 2
+                  color: Qt.alpha(root.themeAccent, 0.18)
+
+                  Rectangle {
+                    height: parent.height
+                    radius: parent.radius
+                    width: parent.width * (card.modelData.progressPercent / 100)
+                    color: root.themeAccent
+                  }
+                }
+
+                Text {
+                  id: remainingLabel
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: card.modelData.remaining !== "" ? card.modelData.remaining : card.modelData.progressPercent + "%"
+                  color: root.themeMuted
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                }
               }
             }
           }

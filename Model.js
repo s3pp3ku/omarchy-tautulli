@@ -22,24 +22,57 @@ function parseActivity(raw) {
 
 function parseSession(s) {
   s = s || {}
+  var mediaType = String(s.media_type || "")
+  var durationMs = parseInt(s.duration, 10) || 0
+  var offsetMs = parseInt(s.view_offset, 10) || 0
   return {
     sessionKey: String(s.session_key || ""),
     user: String(s.friendly_name || s.user || "Unknown"),
     title: String(s.full_title || s.title || "Unknown title"),
+    episodeTag: episodeTag(mediaType, s.parent_media_index, s.media_index),
+    mediaType: mediaType,
+    year: String(s.year || ""),
+    library: String(s.library_name || ""),
     state: String(s.state || "playing"),
     progressPercent: Math.max(0, Math.min(100, parseInt(s.progress_percent, 10) || 0)),
+    remaining: formatRemaining(durationMs, offsetMs),
     player: String(s.player || ""),
-    platform: String(s.platform || ""),
+    product: String(s.product || ""),
     quality: formatQuality(s),
+    bandwidth: formatBandwidth(s.bandwidth),
     location: String(s.location || "").toUpperCase(),
     ipAddress: String(s.ip_address || "")
   }
+}
+
+function episodeTag(mediaType, season, episode) {
+  if (mediaType !== "episode") return ""
+  var s = parseInt(season, 10)
+  var e = parseInt(episode, 10)
+  if (isNaN(s) || isNaN(e)) return ""
+  return "S" + String(s).padStart(2, "0") + "E" + String(e).padStart(2, "0")
 }
 
 function formatQuality(s) {
   var decision = String(s.transcode_decision || "").toLowerCase()
   var label = decision === "transcode" ? "Transcode" : decision === "copy" ? "Direct Stream" : decision === "direct play" ? "Direct Play" : ""
   var resolution = String(s.stream_video_resolution || s.video_resolution || "")
-  if (label && resolution) return label + " • " + resolution
-  return label || resolution || ""
+  if (label && resolution) return label + " • " + resolution + "p"
+  return resolution ? resolution + "p" : label
+}
+
+function formatBandwidth(kbps) {
+  var n = parseInt(kbps, 10)
+  if (!n) return ""
+  return n >= 1000 ? (n / 1000).toFixed(1) + " Mbps" : n + " Kbps"
+}
+
+function formatRemaining(durationMs, offsetMs) {
+  var remainingMs = durationMs - offsetMs
+  if (!durationMs || remainingMs <= 0) return ""
+  var totalMinutes = Math.round(remainingMs / 60000)
+  var hours = Math.floor(totalMinutes / 60)
+  var minutes = totalMinutes % 60
+  if (hours > 0) return hours + "h " + minutes + "m left"
+  return minutes + "m left"
 }
