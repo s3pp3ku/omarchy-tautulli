@@ -16,11 +16,13 @@
     "defaultSection": "right",
     "defaults": {
       "pollSeconds": 30,
-      "dimWhenIdle": true
+      "dimWhenIdle": true,
+      "showPosters": true
     },
     "schema": [
       { "key": "pollSeconds", "type": "integer", "label": "Refresh interval (seconds)", "min": 10, "max": 300, "step": 5, "defaultValue": 30 },
-      { "key": "dimWhenIdle", "type": "boolean", "label": "Dim the icon when nobody is watching", "defaultValue": true }
+      { "key": "dimWhenIdle", "type": "boolean", "label": "Dim the icon when nobody is watching", "defaultValue": true },
+      { "key": "showPosters", "type": "boolean", "label": "Show poster art in the dropdown", "defaultValue": true }
     ]
   }
 }

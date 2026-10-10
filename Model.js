@@ -40,7 +40,10 @@ function parseSession(s) {
     product: String(s.product || ""),
     quality: formatQuality(s),
     bandwidth: formatBandwidth(s.bandwidth),
-    ipAddress: String(s.ip_address || "")
+    ipAddress: String(s.ip_address || ""),
+    // Prefer the show's poster over the episode thumb — it's the
+    // recognizable artwork; the per-episode thumb is often just a still.
+    posterPath: String(s.grandparent_thumb || s.thumb || "")
   }
 }
 

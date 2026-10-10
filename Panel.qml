@@ -29,7 +29,18 @@ Panel {
 
   readonly property int pollSeconds: Math.max(10, parseInt(setting("pollSeconds", 30), 10) || 30)
   readonly property bool dimWhenIdle: setting("dimWhenIdle", true) === true
+  readonly property bool showPosters: setting("showPosters", true) === true
   readonly property bool configured: tautulliUrl !== "" && apiKey !== ""
+
+  // pms_image_proxy only honors the API key through the /api/v2 command
+  // form; the bare /pms_image_proxy path redirects to a login page even
+  // with ?apikey= set.
+  function posterUrl(session) {
+    if (!root.showPosters || !session || session.posterPath === "") return ""
+    return root.tautulliUrl + "/api/v2?apikey=" + encodeURIComponent(root.apiKey)
+      + "&cmd=pms_image_proxy&img=" + encodeURIComponent(session.posterPath)
+      + "&width=120&height=180"
+  }
 
   property bool editingCredentials: false
   property string urlDraft: ""
@@ -391,7 +402,7 @@ Panel {
             id: card
             required property var modelData
             width: column.width
-            implicitHeight: cardColumn.implicitHeight + Style.space(24)
+            implicitHeight: Math.max(posterFrame.height, cardColumn.implicitHeight) + Style.space(24)
             radius: Style.cornerRadius
             color: Qt.alpha(root.themeAccent, 0.10)
             border.width: 1
@@ -406,12 +417,34 @@ Panel {
               color: root.themeAccent
             }
 
+            Rectangle {
+              id: posterFrame
+              visible: poster.source !== ""
+              width: visible ? Style.space(54) : 0
+              height: Style.space(81)
+              anchors.left: parent.left
+              anchors.leftMargin: Style.space(14)
+              anchors.verticalCenter: parent.verticalCenter
+              radius: Style.cornerRadius
+              clip: true
+              color: Qt.alpha(root.fg, 0.08)
+
+              Image {
+                id: poster
+                anchors.fill: parent
+                source: root.posterUrl(card.modelData)
+                fillMode: Image.PreserveAspectCrop
+                asynchronous: true
+                smooth: true
+              }
+            }
+
             Column {
               id: cardColumn
-              anchors.left: parent.left
+              anchors.left: posterFrame.right
               anchors.right: parent.right
               anchors.verticalCenter: parent.verticalCenter
-              anchors.leftMargin: Style.space(16)
+              anchors.leftMargin: Style.space(12)
               anchors.rightMargin: Style.space(14)
               spacing: Style.space(6)
 
