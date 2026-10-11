@@ -27,6 +27,7 @@ function parseSession(s) {
   var offsetMs = parseInt(s.view_offset, 10) || 0
   return {
     sessionKey: String(s.session_key || ""),
+    sessionId: String(s.session_id || ""),
     user: String(s.friendly_name || s.user || "Unknown"),
     title: String(s.full_title || s.title || "Unknown title"),
     episodeTag: episodeTag(mediaType, s.parent_media_index, s.media_index),
@@ -90,6 +91,24 @@ function parseIpLookup(raw) {
     region: String(parsed.regionName || ""),
     country: String(parsed.country || ""),
     isp: String(parsed.isp || parsed.org || "")
+  }
+}
+
+// terminate_session's own return value — {result, message} — rides inside
+// the usual api2 envelope as `data`, so a failed API call (bad key, wrong
+// params) and a failed termination (bad session, PMS unreachable) show up
+// in two different places.
+function parseTerminateResult(raw) {
+  try {
+    var parsed = JSON.parse(raw)
+    var response = parsed && parsed.response ? parsed.response : null
+    if (!response || response.result !== "success")
+      return { ok: false, error: (response && response.message) || "Tautulli rejected the request" }
+    var inner = response.data
+    if (inner && inner.result === "success") return { ok: true, error: "" }
+    return { ok: false, error: (inner && inner.message) || "Tautulli refused to end the stream" }
+  } catch (e) {
+    return { ok: false, error: "Couldn't read Tautulli's response" }
   }
 }
 

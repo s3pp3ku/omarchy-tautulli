@@ -30,6 +30,7 @@ Panel {
   readonly property int pollSeconds: Math.max(10, parseInt(setting("pollSeconds", 30), 10) || 30)
   readonly property bool dimWhenIdle: setting("dimWhenIdle", true) === true
   readonly property bool showPosters: setting("showPosters", true) === true
+  readonly property bool allowEndStream: setting("allowEndStream", true) === true
   readonly property bool configured: tautulliUrl !== "" && apiKey !== ""
 
   // pms_image_proxy only honors the API key through the /api/v2 command
@@ -419,6 +420,10 @@ Panel {
             property bool lookupLoading: false
             property string lookupError: ""
             property var lookupData: null
+            property bool endExpanded: false
+            property bool ending: false
+            property string endMessage: ""
+            property string endError: ""
             width: column.width
             implicitHeight: Math.max(posterFrame.height, cardColumn.implicitHeight) + Style.space(30)
             radius: Style.cornerRadius
@@ -456,6 +461,50 @@ Panel {
                 if (exitCode !== 0 && card.lookupError === "" && card.lookupData === null)
                   card.lookupError = "Lookup request failed"
               }
+            }
+
+            function endStream() {
+              if (card.ending) return
+              card.ending = true
+              card.endError = ""
+              endProc.command = ["curl", "-fsS", "--max-time", "8", "-X", "POST",
+                "--data-urlencode", "apikey=" + root.apiKey,
+                "--data-urlencode", "cmd=terminate_session",
+                "--data-urlencode", "session_key=" + card.modelData.sessionKey,
+                "--data-urlencode", "session_id=" + card.modelData.sessionId,
+                "--data-urlencode", "message=" + card.endMessage,
+                root.tautulliUrl + "/api/v2"]
+              endProc.running = true
+            }
+
+            Process {
+              id: endProc
+              stdout: StdioCollector {
+                waitForEnd: true
+                onStreamFinished: {
+                  card.ending = false
+                  var result = Model.parseTerminateResult(text)
+                  if (result.ok) {
+                    card.endExpanded = false
+                    // The session doesn't disappear from get_activity
+                    // instantly; give Plex a moment before polling again,
+                    // same delay Tautulli's own UI uses.
+                    endRefreshTimer.restart()
+                  } else {
+                    card.endError = result.error
+                  }
+                }
+              }
+              onExited: function(exitCode) {
+                card.ending = false
+                if (exitCode !== 0 && card.endError === "") card.endError = "Couldn't reach Tautulli"
+              }
+            }
+
+            Timer {
+              id: endRefreshTimer
+              interval: 2500
+              onTriggered: root.refresh()
             }
 
             Rectangle {
@@ -498,34 +547,94 @@ Panel {
               anchors.rightMargin: Style.space(16)
               spacing: Style.space(7)
 
-              Row {
+              Item {
                 width: parent.width
-                spacing: Style.space(8)
+                height: Math.max(userRow.implicitHeight, endButton.visible ? endButton.implicitHeight : 0)
 
-                Text {
-                  text: card.modelData.user
-                  color: root.themeAccent
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.body
-                  font.bold: true
-                }
-
-                Rectangle {
+                Row {
+                  id: userRow
+                  anchors.left: parent.left
                   anchors.verticalCenter: parent.verticalCenter
-                  radius: Style.cornerRadius
-                  color: Qt.alpha(root.themeAccent, 0.22)
-                  implicitWidth: stateLabel.implicitWidth + Style.space(12)
-                  implicitHeight: stateLabel.implicitHeight + Style.space(4)
+                  spacing: Style.space(8)
+
                   Text {
-                    id: stateLabel
-                    anchors.centerIn: parent
-                    text: card.modelData.state.toUpperCase()
+                    text: card.modelData.user
                     color: root.themeAccent
                     font.family: root.fontFamily
-                    font.pixelSize: Style.font.caption
+                    font.pixelSize: Style.font.body
                     font.bold: true
-                    font.letterSpacing: 1
                   }
+
+                  Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    radius: Style.cornerRadius
+                    color: Qt.alpha(root.themeAccent, 0.22)
+                    implicitWidth: stateLabel.implicitWidth + Style.space(12)
+                    implicitHeight: stateLabel.implicitHeight + Style.space(4)
+                    Text {
+                      id: stateLabel
+                      anchors.centerIn: parent
+                      text: card.modelData.state.toUpperCase()
+                      color: root.themeAccent
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      font.bold: true
+                      font.letterSpacing: 1
+                    }
+                  }
+                }
+
+                Button {
+                  id: endButton
+                  visible: root.allowEndStream
+                  anchors.right: parent.right
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: card.endExpanded ? "CANCEL" : "END"
+                  tooltipText: card.endExpanded ? "Never mind" : "End this stream"
+                  fontFamily: root.fontFamily
+                  fontSize: Style.font.caption
+                  foreground: card.endExpanded ? root.fg : Color.urgent
+                  bordered: true
+                  onClicked: card.endExpanded = !card.endExpanded
+                }
+              }
+
+              Column {
+                width: parent.width
+                spacing: Style.space(8)
+                visible: card.endExpanded
+
+                TextField {
+                  id: endMessageField
+                  width: parent.width
+                  placeholderText: "The server owner has ended the stream."
+                  foreground: root.fg
+                  font.family: root.fontFamily
+                  enabled: !card.ending
+                  onTextChanged: card.endMessage = text
+                }
+
+                Row {
+                  spacing: Style.space(6)
+                  Button {
+                    text: card.ending ? "ENDING..." : "END STREAM"
+                    fontFamily: root.fontFamily
+                    fontSize: Style.font.bodySmall
+                    foreground: Color.urgent
+                    bordered: true
+                    enabled: !card.ending
+                    onClicked: card.endStream()
+                  }
+                }
+
+                Text {
+                  visible: card.endError !== ""
+                  width: parent.width
+                  text: card.endError
+                  color: Color.urgent
+                  wrapMode: Text.Wrap
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
                 }
               }
 
