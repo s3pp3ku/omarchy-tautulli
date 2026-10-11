@@ -467,7 +467,11 @@ Panel {
               if (card.ending) return
               card.ending = true
               card.endError = ""
-              endProc.command = ["curl", "-fsS", "--max-time", "8", "-X", "POST",
+              // Tautulli's own terminate_session waits on a round trip to
+              // the actual Plex Media Server (not just its local DB), which
+              // can take a while for a remote/WAN client — give it real
+              // room rather than the ~8s used for the quick read-only calls.
+              endProc.command = ["curl", "-fsS", "--max-time", "25", "-X", "POST",
                 "--data-urlencode", "apikey=" + root.apiKey,
                 "--data-urlencode", "cmd=terminate_session",
                 "--data-urlencode", "session_key=" + card.modelData.sessionKey,
@@ -486,18 +490,28 @@ Panel {
                   var result = Model.parseTerminateResult(text)
                   if (result.ok) {
                     card.endExpanded = false
-                    // The session doesn't disappear from get_activity
-                    // instantly; give Plex a moment before polling again,
-                    // same delay Tautulli's own UI uses.
-                    endRefreshTimer.restart()
+                    card.endError = ""
                   } else {
-                    card.endError = result.error
+                    // A slow PMS round trip can time out this request (or
+                    // come back as a transient error) after the kill
+                    // already reached the client — so this message isn't
+                    // the final word. The refresh below is: if the session
+                    // is actually gone, the whole card disappears and the
+                    // stale error goes with it; if it's genuinely still
+                    // there, the error stands.
+                    card.endError = result.error + " — checking whether it went through anyway..."
                   }
+                  // Session removal from get_activity lags the actual kill
+                  // a little either way; same delay Tautulli's own UI uses.
+                  endRefreshTimer.restart()
                 }
               }
               onExited: function(exitCode) {
                 card.ending = false
-                if (exitCode !== 0 && card.endError === "") card.endError = "Couldn't reach Tautulli"
+                if (exitCode !== 0 && card.endError === "") {
+                  card.endError = "No response in time — checking whether it went through anyway..."
+                  endRefreshTimer.restart()
+                }
               }
             }
 
