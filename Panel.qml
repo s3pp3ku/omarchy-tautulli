@@ -415,12 +415,48 @@ Panel {
           Rectangle {
             id: card
             required property var modelData
+            property bool lookupExpanded: false
+            property bool lookupLoading: false
+            property string lookupError: ""
+            property var lookupData: null
             width: column.width
             implicitHeight: Math.max(posterFrame.height, cardColumn.implicitHeight) + Style.space(30)
             radius: Style.cornerRadius
             color: Qt.alpha(root.themeAccent, 0.10)
             border.width: 1
             border.color: Qt.alpha(root.themeAccent, 0.45)
+
+            function toggleLookup() {
+              card.lookupExpanded = !card.lookupExpanded
+              if (card.lookupExpanded && card.lookupData === null && !card.lookupLoading) {
+                card.lookupLoading = true
+                lookupProc.command = ["curl", "-fsS", "--max-time", "6", "http://ip-api.com/json/" + card.modelData.ipAddress]
+                lookupProc.running = true
+              }
+            }
+
+            Process {
+              id: lookupProc
+              stdout: StdioCollector {
+                waitForEnd: true
+                onStreamFinished: {
+                  card.lookupLoading = false
+                  try {
+                    var result = Model.parseIpLookup(text)
+                    if (result.ok) { card.lookupData = result; card.lookupError = "" }
+                    else { card.lookupError = result.error; card.lookupData = null }
+                  } catch (e) {
+                    card.lookupError = "Couldn't read the lookup response"
+                    card.lookupData = null
+                  }
+                }
+              }
+              onExited: function(exitCode) {
+                card.lookupLoading = false
+                if (exitCode !== 0 && card.lookupError === "" && card.lookupData === null)
+                  card.lookupError = "Lookup request failed"
+              }
+            }
 
             Rectangle {
               width: Style.space(3)
@@ -529,16 +565,79 @@ Panel {
                 font.pixelSize: Style.font.caption
               }
 
-              Text {
+              Row {
                 width: parent.width
-                visible: text !== ""
-                text: [card.modelData.bandwidth, card.modelData.ipAddress]
-                  .filter(function(v) { return v !== "" }).join("  \u2022  ")
-                color: root.fg
-                opacity: 0.55
-                elide: Text.ElideRight
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
+                spacing: Style.space(6)
+                visible: card.modelData.bandwidth !== "" || card.modelData.ipAddress !== ""
+
+                Text {
+                  visible: card.modelData.bandwidth !== ""
+                  text: card.modelData.bandwidth + (card.modelData.ipAddress !== "" ? "  \u2022 " : "")
+                  color: root.fg
+                  opacity: 0.55
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                }
+
+                Text {
+                  visible: card.modelData.ipAddress !== ""
+                  text: card.modelData.ipAddress
+                  color: card.modelData.ipIsPublic ? root.themeAccent : root.fg
+                  opacity: card.modelData.ipIsPublic ? 1 : 0.55
+                  font.underline: card.modelData.ipIsPublic
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+
+                  MouseArea {
+                    anchors.fill: parent
+                    anchors.margins: -2
+                    enabled: card.modelData.ipIsPublic
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: card.toggleLookup()
+                  }
+                }
+              }
+
+              // A location lookup, Tautulli-style: Tautulli's own IP modal
+              // calls its own get_geoip_lookup/get_whois_lookup routes, but
+              // those need a logged-in Tautulli web session, not just the
+              // API key this widget has. ip-api.com's free endpoint covers
+              // the same ground (city/region/country + ISP) with one
+              // unauthenticated request.
+              Column {
+                width: parent.width
+                spacing: Style.space(2)
+                visible: card.lookupExpanded
+
+                Text {
+                  visible: card.lookupLoading
+                  text: "Looking up " + card.modelData.ipAddress + "..."
+                  color: root.themeMuted
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  font.italic: true
+                }
+                Text {
+                  visible: !card.lookupLoading && card.lookupError !== ""
+                  text: card.lookupError
+                  color: Color.urgent
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                }
+                Text {
+                  width: parent.width
+                  visible: !card.lookupLoading && card.lookupError === "" && card.lookupData !== null
+                  text: card.lookupData
+                    ? [card.lookupData.city, card.lookupData.region, card.lookupData.country].filter(function(v) { return v !== "" }).join(", ")
+                      + (card.lookupData.isp !== "" ? "  \u2022  " + card.lookupData.isp : "")
+                    : ""
+                  color: root.themeMuted
+                  wrapMode: Text.Wrap
+                  elide: Text.ElideRight
+                  maximumLineCount: 2
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                }
               }
 
               Row {

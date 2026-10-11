@@ -41,6 +41,10 @@ function parseSession(s) {
     quality: formatQuality(s),
     bandwidth: formatBandwidth(s.bandwidth),
     ipAddress: String(s.ip_address || ""),
+    // Tautulli's own IP modal only runs its geolocation/whois lookups for
+    // public IPs ("location" is Tautulli's own lan/wan classification, not
+    // ip-api.com's); a LAN IP has nothing a geo lookup could tell you.
+    ipIsPublic: String(s.location || "").toLowerCase() === "wan",
     // Prefer the show's poster over the episode thumb — it's the
     // recognizable artwork; the per-episode thumb is often just a still.
     posterPath: String(s.grandparent_thumb || s.thumb || "")
@@ -68,6 +72,25 @@ function formatBandwidth(kbps) {
   var n = parseInt(kbps, 10)
   if (!n) return ""
   return n >= 1000 ? (n / 1000).toFixed(1) + " Mbps" : n + " Kbps"
+}
+
+// ip-api.com's free JSON endpoint: city/region/country geolocation plus the
+// ISP/org, in one request — the same two sections Tautulli's own IP modal
+// shows (Geolocation Lookup + Whois Lookup), without needing a logged-in
+// Tautulli web session the way Tautulli's own get_geoip_lookup/
+// get_whois_lookup routes do.
+function parseIpLookup(raw) {
+  var parsed = JSON.parse(raw)
+  if (!parsed || parsed.status !== "success") {
+    return { ok: false, error: (parsed && parsed.message) || "Lookup failed" }
+  }
+  return {
+    ok: true,
+    city: String(parsed.city || ""),
+    region: String(parsed.regionName || ""),
+    country: String(parsed.country || ""),
+    isp: String(parsed.isp || parsed.org || "")
+  }
 }
 
 function formatRemaining(durationMs, offsetMs) {
